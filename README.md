@@ -13,5 +13,6 @@ The programs here are written in Telehack's TH BASIC, a reimagination of the ori
 - [HASH.BAS](./hash.bas), djb2 hash adjusted for ieee754 `float64`
 - [HEAP.BAS](./heap.bas), implementation of [Heap's Algorithm](https://en.wikipedia.org/wiki/Heap%27s_Algorithm)
 - [REPL.BAS](./repl.bas), WiP P-code interpreter and a TH BASIC compiler for the interpreter.
+- [TRIE.BAS](./trie.bas), a hash table-backed prefix tree to support tab completion. Uses `FOR..NEXT` instead of `GOTO`/`GOSUB` to make integration easier.
 - [UNDIALED.BAS](./undialed.bas), given a set of files with phone numbers, dial the numbers not in your `dial /log`
 
