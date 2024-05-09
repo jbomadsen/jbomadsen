@@ -25,11 +25,12 @@ maxlvl = int(th_sprintf$("%f",log(opts_c%) * (2/log(2)) / 2)) : ' <- floor(log2(
 for level = 0 to maxlvl
 s$ = string$(2*int((2^(maxlvl - level))/2)-1," ")
 padmid$ = string$(int(2^(maxlvl + 1 - level)/2)-1, " ")
+if level = maxlvl then & chr$(27) "[7m";
 for x = 0 to chars_c%(level)-1
   i = chars(level, x)
   missing=((index(parent(i))*2-1) -(i<parent(i)) - (drawn-1))
   if (x > 0) then pipe_p = len(padmid$)>= 1  or (parent(i)<>parent(chars(level,x-1)))
-  if (x > 0) then s$=th_sprintf$("%s%c[2m%c%c[m%s", padmid$, 27, 32 + pipe_p * 9442, 27, padmid$)
+  if (x > 0) then s$=th_sprintf$("%s%c[2m%c%c[22m%s", padmid$, 27, 32 + pipe_p * 9442, 27, padmid$)
   & s$ string$(missing,"  ") chr$(opts%(i)) ; : drawn=drawn+missing+1: index(i) = drawn
 next x : & : if drawn < opts_c% then next level
-
+& chr$(27) "[27m" ;
