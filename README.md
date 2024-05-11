@@ -13,6 +13,7 @@ The programs here are written in Telehack's TH BASIC, a reimagination of the ori
 - [EXPONENTIAL.BAS](./exponential.bas), benchmark of [linear](https://en.wikipedia.org/wiki/Linear_search) & [exponential](https://en.wikipedia.org/wiki/Exponential_search) search algorithms for counting lines in a file
 - [HASH.BAS](./hash.bas), djb2 hash adjusted for ieee754 `float64`
 - [HEAP.BAS](./heap.bas), implementation of [Heap's Algorithm](https://en.wikipedia.org/wiki/Heap%27s_Algorithm)
+- [LIGHTSOUT.BAS](./lightsout.bas), [LightsOut](https://en.wikipedia.org/wiki/Lights_Out_%28game%29) game clone
 - [LZ4.BAS](./lz4.bas), mostly working [LZ4 decompression](https://github.com/lz4/lz4/)
 - [REPL.BAS](./repl.bas), WiP P-code interpreter and a TH BASIC compiler for the interpreter.
 - [SUN.BAS](./sun.bas), paints a sun on the terminal. Unashamedly stolen from a certain H/P/A BBS you might find you way to.
