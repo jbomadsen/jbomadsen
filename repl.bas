@@ -23,41 +23,49 @@ quot$ = chr$(34)
 
 print "ByteCodeBASIC (c) 2024"
 
+'TODO it's a problem if the types share names with operators/functions:
 type_int%       = asc("%") : type2str$(type_int%) = "int"
 type_str%       = asc("$") : type2str$(type_str%) = "str"
 type_push%      = asc("(") : type2str$(type_push%) = "("
 type_pop%       = asc(")") : type2str$(type_pop%)  = ")"
 type_opcode%    = asc("!") : type2str$(type_opcode%) = "op"
-type_ptr%       = asc("&") : type2str$(type_ptr%) = "ptr"
-
+type_ptr%       = asc("x") : type2str$(type_ptr%) = "ptr"
+type_ptrkey%   =  asc("&") : type2str$(type_ptrkey%) = "ptrkey"
 def fntlv$(fnpascal_typ%, fnpascal_arg$) = chr$(fnpascal_typ%) + chr$(len(fnpascal_arg$)) + fnpascal_arg$
 def fnlen%(fnlen_tape$, fnlen_off%) = asc(mid$(fnlen_tape$, fnlen_off% + 1, 1))
 def fntyp%(fntyp_tape$, fntyp_off%) = asc(mid$(fntyp_tape$, fntyp_off%    , 1))
 def fnval$(fnval_tape$, fnval_off%) = mid$(fnval_tape$, fnval_off%+2, fnlen%(fnval_tape$, fnval_off%))
 def fnid$(fnid_tape$, fnid_off%) = mid$(fnid_tape$, fnid_off%, 2) + fnval$(fnid_tape$, fnid_off%)
 def fn_next_off%(fn_next_off_tape$, fn_next_off_off%) = fn_next_off_off% + fnlen%(fn_next_off_tape$, fn_next_off_off%)
+def fn_has_arity(op$) = (9 = precedence%(op$)) or fntyp%(op$,1)=type_ptr%
 
+' interpreter tables:
+'   statement(op): true if op is a statement and should clear operands_c%
 dim op2str$(1)
-str2op$("DATA")  = "DATA" : op2str$("DATA") = "DATA"
-str2op$("READ")  = "READ" : op2str$("READ") = "READ" : opmin%("READ") = 1
-str2op$("PRINT") = "&"
+str2op$("DATA")  = "DATA" : op2str$("DATA") = "DATA": statement("DATA") = 1
+str2op$("READ")  = "READ" : op2str$("READ") = "READ" : opmin%("READ") = 1: statement("READ") = 1
+str2op$("PRINT") = "&" : statement("&") = 1
 str2op$("&") = "&" : op2str$("&") = "PRINT"
-str2op$("+") = "+"
-str2op$("SLEEP") = "SLEEP" : op2str$("SLEEP") = "SLEEP" : opmin%("SLEEP") = 1 : opmax%("SLEEP") = 1
-str2op$("=") = "="
-str2op$("GOTO") = ":"  : op2str$(":") = "GOTO" : opmin%(":") = 1 : opmax%(":") = 1
-str2op$("GOSUB") = "|" : op2str$("|") = "GOSUB" : opmin%("|") = 1 : opmax%("|") = 1
-str2op$("RETURN") = ";"
-str2op$("END")    = "END"
-str2op$("-")      = "-"
+str2op$("+") = "+" : op2str$("+") = "+"
+str2op$("SLEEP") = "SLEEP" : op2str$("SLEEP") = "SLEEP" : opmin%("SLEEP") = 1 : opmax%("SLEEP") = 1: statement("SLEEP")=1
+str2op$("=") = "=" : statement("=") = 1
+str2op$("GOTO") = ":"  : op2str$(":") = "GOTO" : opmin%(":") = 1 : opmax%(":") = 1: statement(":") = 1
+str2op$("GOSUB") = "|" : op2str$("|") = "GOSUB" : opmin%("|") = 1 : opmax%("|") = 1: statement("|") = 1
+str2op$("RETURN") = ";": op2str$(";") = "RETURN": statement(";") = 1
+str2op$("END")    = "END": op2str$("END") = "END": statement("END") = 1
+str2op$("ON")     = "ON" : op2str$("ON")  = "ON" : opmin%("ON") = 2: statement("ON") = 1
+str2op$("-")      = "-" : op2str$("-") = "-"
 str2op$("*")      = "*" : op2str$("*") = "*"
-str2op$("/")      = "/"
+str2op$("/")      = "/" : op2str$("/") = "/"
 str2op$("^")      = "^"
 str2op$("XOR")    = "XOR"
-str2op$("IF")     = "IF"
-str2op$("THEN")   = "THEN"
-str2op$("TRON")   = "TRON"
-str2op$("TROFF")  = "TROFF"
+str2op$("IF")     = "IF" : op2str$("IF")   = "IF" : statement("IF") = 1
+str2op$("THEN")   = "THEN": op2str$("THEN") = "THEN"
+str2op$("FOR")    = "FOR" : op2str$("FOR") = "FOR" : statement("FOR") = 1
+str2op$("NEXT")   = "NEXT": op2str$("NEXT")= "NEXT" : statement("NEXT") = 1
+str2op$("TO")     = "TO"  : op2str$("TO")  = "TO": statement("TO") = 1
+str2op$("TRON")   = "TRON": op2str$("TRON")="TRON"  : statement("TRON") = 1
+str2op$("TROFF")  = "TROFF":op2str$("TROFF")="TROFF": statement("TROFF")= 1
 str2op$("SIN")    = "SIN" : op2str$("SIN") = "SIN" : opmax%("SIN") = 1
 str2op$("COS")    = "COS" : op2str$("COS") = "COS" : opmax%("COS") = 1
 str2op$("ATN")    = "ATN" : op2str$("ATN") = "ATN" : opmax%("ATN") = 2 :' TODO
@@ -67,7 +75,7 @@ str2op$("UPS$")   = "UPS$": op2str$("UPS$")= "UPS$" : opmax%("UPS$") = 1
 str2op$("NOT")    = "NOT" : op2str$("NOT") = "NOT"
 str2op$("AND")    = "AND"
 str2op$("OR")     = "OR" : op2str$("OR") = "OR"
-str2op$("==")     = "=="
+str2op$("==")     = "==" : op2str$("==") = "=": 'boolean comparisong
 str2op$("<")      = "<"  : op2str$("<") = "<"
 str2op$(">")      = ">"  : op2str$(">") = ">"
 str2op$("MOD")    = "%"  : op2str$("%") = "MOD"
@@ -77,29 +85,18 @@ str2op$("CINT")   = "CINT":op2str$("CINT") = "CINT" : opmax%("CINT") = 1
 str2op$("CSNG")   = "CSNG":op2str$("CSNG") = "CSNG" : opmax%("CSNG") = 1
 str2op$("LEN")    = "LEN" :op2str$("LEN") = "LEN"   : opmax%("LEN") = 1
 str2op$("MID$")   = "MID$":op2str$("MID$") = "MID$" : opmax%("MID$") = 3
-op2str$("+")    = "+"
+str2op$("RND")    = "RND" :op2str$("RND")  = "RND"  : opmax%("RND") = 1
 op2str$("=")    = ":="
-op2str$("#")    = "LINE"
+op2str$("#")    = "LINE": statement("#") = 1
 op2str$("SWAP") = "SWAP"
-op2str$("END")  = "END"
-op2str$(";")    = "RETURN"
-op2str$("-")    = "-"
-op2str$("/")    = "/"
 op2str$("^")    = "POW"
 op2str$("XOR")  = "XOR"
-op2str$("IF")   = "IF"
-op2str$("THEN") = "THEN"
-op2str$("TRON") = "TRON"
-op2str$("TROFF")= "TROFF"
 op2str$("CHR$") = "CHR$"
 op2str$("ASC")  = "ASC"
 op2str$("~-")   = "~-" : 'unary minus
 op2str$("ABS")  = "ABS" : 'absolute int value
 op2str$("BIN$") = "BIN$" : 'int to binary string
-op2str$("==")   = "==" : 'boolean comparison
 op2str$("<>")   = "<>" : 'boolean comparison
-op2str$("%")    = "MOD"
-op2str$(">")    = ">"
 op2str$("<=")   = "<="
 op2str$(">=")   = ">="
 op2str$("AND")  = "AND"
@@ -151,6 +148,10 @@ op2off("INT")   = 43 : 'truncated floored float of int/string
 op2off("CINT")  = 44 : 'rounded up/down version of INT
 op2off("CSNG")  = 45 : 'CSNG
 op2off("READ")  = 46 : 'read from DATA
+op2off("DATA")  = 47 : 'push DATA at program load
+op2off("ON")    = 48 : 'ON expr GOTO line1, line2, ...
+op2off("RND")   = 49 : 'RND/1(upper) random float from [0;upper(
+op2off("NEXT")  = 50 : 'NEXT/0, NEXT/1
 'ranked from strongest (high) to lowest (1) binding:
 precedence%("~-")   = 10
 precedence%("ABS")  = 9 : precedence%("ASC")  = 9 : precedence%("ATN") = 9 : precedence%("BIN$") = 9
@@ -159,7 +160,7 @@ precedence%("D2R")  = 9 : precedence%("DATE$") = 9 : precedence%("EOF") = 9 : pr
 precedence%("HEX$") = 9 : precedence%("INKEY$")= 9 : precedence%("INPUT$") = 9: precedence%("INSTR") = 9
 precedence%("INT") = 9 : precedence%("ITM") = 9 : precedence%("LEFT$") = 9: precedence%("LEN") = 9
 precedence%("LG") = 9
-precedence%("MID$") = 9
+precedence%("MID$") = 9 : precedence%("RND") = 9
 precedence%("SIN") = 9 : precedence%("VAL") = 9
 precedence%("^") = 7
 precedence%("*") = 6
@@ -250,44 +251,63 @@ if user$ = "jbomadsen" then inp$ = "tron: print 1 or 8" : '9
 if user$ = "jbomadsen" then inp$ = "tron: print 7 and 11" : '3
 if user$ = "jbomadsen" then inp$ = "tron: print 7 mod 3" : '1
 if user$ = "jbomadsen" then inp$ = "tron: print csng(-1),csng(0),csng(1),csng("+quot$+"-1"+quot$+")
-print "Supported statements: ","X=Y  END  IF..THEN  GOSUB  GOTO  GO TO  PRINT  RETURN  SLEEP  TROFF  TRON"
-print "NOT supported statements: CLEAR, CLOSE, CLS, COLOR, DATA, DEF, DIM, FOR, HOME, OPEN, INPUT, ..."
+if user$ = "jbomadsen" then inp$ = "tron:10 i=i+1: on (i<>0)+1 goto 1000,2000: 1000 & 1000:END:2000 &2000:END"
+if user$ = "jbomadsen" then inp$ = "tron:on int(rnd(3)) goto 10,20:& "+quot$+"no rnd jmp"+quot$+":10 & 10:20 &20"
+' you can inspect/alter the stopvar of the FOR loop:
+if user$ = "jbomadsen" then inp$ = "for i=3 to 4: & i: sleep 1: next i: & varstops(chr$(36)+chr$(1)+chr$(105))"
+'if user$ = "jbomadsen" then inp$ = "tron:10 i=i+1:& 123"
+print "Supported statements: ","X=Y  DATA  END  FOR..NEXT  IF..THEN  GOSUB  GOTO  GO TO  ON..GOTO PRINT  RETURN  SLEEP  TROFF  TRON"
+print "NOT supported statements: CLEAR, CLOSE, CLS, COLOR, DEF, DIM, FOR, HOME, INPUT, LOCATE, OPEN, ..."
 print "Supported functions: ABS(d)  ATN(d)  ASC(s)  BIN$(d)  CHR$(d)  CINT(sd)  COS(d)  CSNG(sd)  INT(sd), LEN(s)  MID$(s,d)  MID$(s,d,d)  SIN(d)  VAL(sd)"
 print "NOT supported functions: D2R, EOF, EXP, HEX$, INKEY$, INPUT$, INSTR, ITM, LEFT$, LG, LIN,"
 print "                         LN, LOG, LOG10, NINT, NUM, OCT$, PEEK, POLKEY$, POS, R2D, REC, RIGHT$, RND,"
 print "                         SGN, SPACE$, SPC$, SQR, SQRT, STR$, STRING$, TAB, TAB$, TAN, TH_*, TIM, TIME$, TIMER, TYP, UPS$"
 print "Supported operators: ","+  *  /  -  ** ^  =  <>  <  >  <= >= AND NOT  OR  XOR  IMP  EQV MOD"
+print "Supported literals:  1 (float64),  1.2 (float64), "+quot$+"string"+quot$+",  &2200 &1B (hex) "
 if user$ <> "xjbomadsen" and inp$ <> "" then print "Example program: "+ inp$
-'if user$ = "jbomadsen" then inp$ = ""
 10 if (user$<> "jbomadsen") or (inp$ = "") then input "Type your program: ", inp$
+if inp$="chain" then goto 60000: 'TODO special demo
 print "INPUT PROGRAM:"
 print csi$+"48;5;11;38;5;18m"+inp$ : print bccolor$;
 gosub 6000 : ' lex & parse
+gosub 600  : ' interpret
+goto 10    : ' read another line
+
+600 '  INTERPRETER
 
 if bytecode$ <> "" then tape$ = bytecode$
 
 print "bytecode tape len: ", len(tape$)
 
+erase mem$
 trace% = 0
-dim callstack$(1)
+erase callstack$
 callstack_frame% = 0
-dim operands$(1)
+erase operands$
 tape_scanned = 0
-dim offset_next_line%(1)
+erase offset_next_line%
 offset_next_line%(0) = 1
 700 'in order for GOTO/GOSUB to work we need to prescan the tape for labels
 if trace% or (not tape_scanned) then print string$(width, "*")
 operands_c% = 0
 actual_line% = 0
+print "off","typ","len","val/t","opc","STACKSTATES"
 for tape_off% = 1 to len(tape$) step 2
   if trace% or (not tape_scanned) then print tape_off%, type2str$(fntyp%(tape$, tape_off%)), fnlen%(tape$, tape_off%), fnval$(tape$, tape_off%)+"/"+op2str$(fnval$(tape$, tape_off%)), operands_c% ;
   if trace% or (not tape_scanned) then for pxi = 1 to pstate_i% : print pstack%(pstate_i%); : next pxi: print
-    if fntyp%(tape$, tape_off%) <> type_ptr% then 750
-      operands$(operands_c%) = mem$( fnval$(tape$,tape_off%) )
+    oval$ = fnval$(tape$, tape_off%)
+    if (tape_scanned=0) or ((fntyp%(tape$, tape_off%) <> type_ptr%) and (fntyp%(tape$, tape_off%) <> type_ptrkey%)) then 750
+      arity = val(fnval$(operands$(operands_c%-1),1))
+      arrkey$ = fntlv$(type_str%, fnval$(tape$, tape_off%))
+      if arity then for i = operands_c%-1-arity to operands_c%-2 : arrkey$=arrkey$+fntlv$(type_str%, fnval$(operands$(i),1)) : next i
+      if trace% then & "POINTER DEREF: ", arrkey$, "->", mem$( arrkey$ ), len(mem$(arrkey$))
+      operands_c% = operands_c% - 1 - arity + 1
+      if operands_c% < 1 then stop
+      if (fntyp%(tape$, tape_off%) = type_ptrkey%) then operands$(operands_c%-1) = fntlv$(type_str%, arrkey$): goto 750
+      operands$(operands_c%-1) = mem$( arrkey$ )
       ' Undefined variables default to 0 or "" depending on their type:
-      if (operands$(operands_c%) = "") and (right$(fnval$(tape$, tape_off%),1)="$") then operands$(operands_c%) = fntlv$(type_str%, "")
-      if operands$(operands_c%) = "" then operands$(operands_c%) = fntlv$(type_int%, 0)
-      operands_c% = operands_c% + 1
+      if (operands$(operands_c%-1) = "") and (right$(fnval$(tape$, tape_off%),1)="$") then operands$(operands_c%-1) = fntlv$(type_str%, "")
+      if (operands$(operands_c%-1) = "") then operands$(operands_c%-1) = fntlv$(type_int%, 0)
 750 if fntyp%(tape$, tape_off%) = type_str% then operands$(operands_c%) = fnid$(tape$, tape_off%) : operands_c% = operands_c% + 1
     if fntyp%(tape$, tape_off%) = type_int% then operands$(operands_c%) = fnid$(tape$, tape_off%) : operands_c% = operands_c% + 1
     if not (fntyp%(tape$, tape_off%) = type_opcode%) then 800
@@ -296,26 +316,26 @@ for tape_off% = 1 to len(tape$) step 2
     if (opmax%(fnval$(tape$, tape_off%))) and (9<>precedence%(fnval$(tape$, tape_off%))) and (operands_c% - opmax%(fnval$(tape$, tape_off%))) > 0 then print "Arity overflow:", operands_c%, op2str$(fnval$(tape$, tape_off%))+"/"+str$(opmax%(fnval$(tape$, tape_off%))):stop
     if (tape_scanned = 0) and (fnval$(tape$, tape_off%)="#") then gosub 1300 : offset_next_line%(actual_line) = fn_next_off%(tape$, tape_off%)-1 : print "next from",actual_line%,offset_next_line%(actual_line%): actual_line% = actual_line% + 1 :goto 800
     if tape_scanned = 0 then goto 800
-    on op2off(fnval$(tape$, tape_off%)) gosub 1000, 1100, 1200, 1300, 1400, 1500, 1600, 1700, 1800, 1900, 2000, 2100, 2200, 2300, 2400, 2500, 2600, 2700, 2800, 2900, 3000, 3100, 3200, 3300, 3400, 3500, 3600, 3700, 3800, 3900, 4000, 4100, 4200, 4300, 4400, 4500, 4600, 4700, 4800, 4900, 4950, 5000, 5050, 5100, 5150, 5200
+    on op2off(fnval$(tape$, tape_off%)) gosub 1000, 1100, 1200, 1300, 1400, 1500, 1600, 1700, 1800, 1900, 2000, 2100, 2200, 2300, 2400, 2500, 2600, 2700, 2800, 2900, 3000, 3100, 3200, 3300, 3400, 3500, 3600, 3700, 3800, 3900, 4000, 4100, 4200, 4300, 4400, 4500, 4600, 4700, 4800, 4900, 4950, 5000, 5050, 5100, 5150, 5200, 5250, 5300, 5350, 5400
 800  tape_off% = fn_next_off%(tape$, tape_off%)
+    if statement(oval$) then operands_c% = 0 : 'clear operands if op was a statement
 next tape_off%
 if tape_scanned = 0 then tape_scanned = 1 : goto 700
 
 print "PROGRAM FINISHED."
 inp$ = ""
-goto 10
-end
+return
+
 900 ' dereference pointer
      stop
      return
 1000 ' PRINT
-1002 if operands_c% = 0 then print: return
+     if operands_c% = 0 then print: return
      print csi$+"48;5;200;37;1m";
      for p% = 0 to operands_c% -1 'to 0 step -1
        print string$(p%>0,chr$(9))+fnval$(operands$(p%),1) ;
      next p%
      print csi$+"m"+bccolor$
-     operands_c% = 0
      return
 1100 ' +
     if operands_c% < 2 then STOP : 'arity error
@@ -329,30 +349,41 @@ end
     operands_c% = operands_c% - 1
     return
 1200 'assignment =
-   if operands_c% < 2 then STOP : 'arity error
-   lhs% = operands_c% - 2
+   if operands_c% < 3 then STOP : 'arity error
+  ' TODO we should now be able to use type_ptrkey% to retrieve lhs_key$ instead of having to do it here:
+   arity = val(fnval$(operands$(operands_c%-3),1))
+   if trace% then & "assignment lhs arity:", arity, operands_c%, operands$(operands_c%-2)
+   lhs_key$ = fntlv$(type_str%, fnval$(operands$(operands_c%-2),1))
+   if arity then for lhs_i% = 0 to operands_c%-4 : lhs_key$ = lhs_key$ + fntlv$(type_str%, fnval$(operands$(lhs_i%),1)): next lhs_i%
    rhs% = operands_c% - 1
    'if fntyp%(operands$(lhs%), 1) 
    'if fntyp%(operands$(lhs%), 1) <> type_str% then STOP : 'type error
-   if trace% then print "ASSIGNMENT",fnval$(operands$(lhs%),1),":=",fnval$(operands$(rhs%),1)
-   mem$( fnval$(operands$(lhs%),1) ) = operands$(rhs%)
-   operands_c% = operands_c% -2
+   if trace% then print "ASSIGNMENT",lhs_key$,th_b64e$(lhs_key$),":=",fnval$(operands$(rhs%),1)
+   ' TODO vars used to use plain key, now they are fntlv(type_str$, previous):
+   mem$( lhs_key$ ) = operands$(rhs%)
+   if trace% then & "assignment set", lhs_key$, " to ", mem$( lhs_key$) 
    return
 1300 'line number /label (for goto, gosub, ...)
+   ' since this is a VM instruction, it gets evaluated/updated each time this instruction is executed,
+   ' which means that "10 & 1: 10 & 2: goto 10" will print  1 2 2 2 ..., as opposed to "2 2 2" in
+   ' regular basic variants where the last 10 would override the first.
+   ' we utilize this in FOR looparr(x%)= .. NEXT where we can't evaluate x% statically
+   if (tape_scanned=0) and (operands_c% > 1) then print "scanning of dynamic labels skips": return
+   if operands_c% > 1 then & operands$(operands_c%-2): stop : 'why does the line have more than one arg?
    if operands_c% < 1 then STOP : 'arity error
    ' point to the label itself, that way GOTO etc can mutate tape_off% and return
    mem$( "line", fnval$(operands$(operands_c%-1),1)) = fntlv$(type_int%, tape_off%) : 'fn_next_off%(tape$, tape_off%)+2
-   operands_c% = operands_c% - 1
+   operands_c% = 0
    return
 1400 'GOTO. NB in TH BASIC 8000.00003 denotes 4th line after 8000.00000, -0.99999 is the first line of unnumbered program
-   tape_off% = val( fnval$( mem$( "line",fnval$(operands$(operands_c%-1),1)   )  ,1))
-   operands_c% = operands_c% - 1
+   target$ = mem$( "line",fnval$(operands$(operands_c%-1),1))
+   if target$ = "" then & "no such line:"+fnval$(operands$(operands_c%-1),1): stop
+   tape_off% = val( fnval$(target$,1)  )
    return
 1500 'SLEEP
    if fntyp%(operands$(operands_c%-1),1) <> type_int% then STOP : 'type error
    if trace% then print "SLEEP opcnt:", operands_c%
    SLEEP fnval$(operands$(operands_c%-1),1)
-   operands_c% = operands_c% - 1
    return
 1600 'GOSUB
    ' subtract 1 (we are pointing to the GOSUB instruction, which is 1 byte long):
@@ -360,7 +391,6 @@ end
    callstack_frame% = callstack_frame% + 1
    tape_off% = val( fnval$( mem$( "line",fnval$(operands$(operands_c%-1),1)   )  ,1))
    if trace% then print "GOSUB", tape_off%
-   operands_c% = operands_c% - 1
    return
 1700 'RETURN
    if callstack_frame% < 1 then STOP
@@ -469,7 +499,7 @@ end
     RETURN
 3200 ' String LENgth
     a% = operands_c% - 2
-    if fntyp%(operands$(a%), 1) <> type_str% then stop : 'type error
+    if fntyp%(operands$(a%), 1) <> type_str% then print type2str$(fntyp%(operands$(a%), 1)) : stop : 'type error
     a_val$ = fnval$(operands$(a%), 1)
     if trace% then print "LEN", a_val$, len(a_val$)
     operands_c% = operands_c% - 1
@@ -513,7 +543,7 @@ end
     if operands_c% < 1 then STOP : 'arity error
     a% = operands_c% - 1
     a_val% = val(fnval$(operands$(a%),1))
-    print "unary minus", operands$(a%), a_val%, "=>", -a_val%
+    if trace% then print "unary minus", operands$(a%), a_val%, "=>", -a_val%
     operands$(a%) = fntlv$(type_int%, -a_val%)
     return
 3700 'abs
@@ -695,17 +725,58 @@ end
    return
 5200 'READ (from DATA)
    col_data = 0
-   row_data = val(mem$("data_row")) + 1
+   row_data = val(mem$("data_row"))
    for var = 0 to operands_c% -1
-     if trace% then print "READ: operands:",operands_c%,fnval$(operands$(var),1)
-     'if val(mem$("data_line")) >= no_read% then stop : ' out of bounds read (row)
+     if trace% then print "READ: operands:",operands_c%,fnval$(operands$(var),1),"row_data:"+str$(row_data),"col_data:"+str$(col_data)
+     if val(mem$("data_line")) <= no_read% then & val(mem$("data_line")), no_read%:stop : ' out of bounds read (row)
      'if val(mem$("data_row")) >= col_read% then stop : 'out of bounds read (column)
-     mem$( fnval$(operands$(var),1) ) = mem$( "data", row_data, col_data )
+     this$ = mem$( "data", row_data, col_data )
+     ' Cast whatever to string if it assignee with $, otherwise cast to float:
+     ' TODO this detection strategy does presumably not work for arrays
+     this_should_be_str = right$(fnval$(operands$(var),1),1) = "$"
+     if this_should_be_str then this$ = fntlv$(type_str%, fnval$(this$,1))
+     if not this_should_be_str then this$ = fntlv$(type_int%, val(fnval$(this$,1)))
+     mem$( operands$(var) ) = this$ : ' TODO used to be fnval()
+     if trace% then & fnval$(operands$(var),1) + " := " + this$
      col_data = col_data + 1
    next var
-   mem$("data_row") = str$(row_data)
-   operands_c% = 0
+   mem$("data_row") = str$(row_data + 1)
    return
+5250 'DATA (push DATA array at program load)
+   if operands_c% < 1 then STOP :'arity error
+   numargs% = val(fnval$(operands$(operands_c% -1),1))
+   if numargs% = 0 then operands_c% = 0 : return
+   for a% = 0 to numargs% - 1
+     mem$( "data", val(mem$("data_line")), a%) = operands$(operands_c%-2-a%)
+   next a%
+   mem$("data_line") = str$(val(mem$("data_line")) + 1)
+   return
+5300 ' ON .. GOTO
+   selector = val(fnval$(operands$(0),1))
+   if (selector = 0) or (selector > operands_c%) then print "ON..GOTO oob": return
+   & operands_c%, selector, operands$(selector)
+   operands$(0) = operands$(selector) : operands_c% = 1
+   goto 1400 : ' actual GOTO
+5350 ' RND
+   operands_c% = operands_c% - 1
+   operands$(operands_c%-1) = fntlv$(type_int%, RND(val(fnval$(operands$(operands_c%-1),1))))
+   return
+5400 ' NEXT
+   ' we have the mem reference in operands$(0)
+   ' - we need to bump it
+   loopvar% = val( fnval$(mem$(fnval$(operands$(0),1)),1) )
+   loopvar% = loopvar% + 1
+   mem$( fnval$(operands$(0),1) ) = fntlv$(type_int%, loopvar%)
+   ' then retriev stopvar: TODOTODO
+   ptrstop$ = fntlv$(type_str%, "varstops") + operands$(0)
+   stopvar% = val(fnval$(mem$(ptrstop$),1))
+   'stopvar% = val(fnval$( fntlv$(type_str%, "varstops", mem$(operands$(0)))  ,1))
+   ' - then compare it
+   if loopvar% > stopvar% then return
+   ' - then goto 1400 (real GOTO):
+   '& "next operands", operands$(0), operands_c%
+   goto 1400
+   stop : 'not implemented
 6000 print string$(width/5*2, "=")+" Lexing & parsing"
      bytecode$ = ""
      def fnwhitespace%(fnws_i%) = th_re(mid$(inp$, fnws_i%, 1), "[ \t]", 1)
@@ -718,106 +789,95 @@ end
      'pstate%("swap")      = 5
      pstate%("assignment") = 5 : state2str$(5) = "assignment"
      pstate%("identifier") = 6 : state2str$(6) = "identifier"
-     pstate%("infix")      = 7 : state2str$(7) = "infix"
-     pstate%("data")       = 8 : state2str$(8) = "data"
-     pstate%("ptr2ref")    = 9 : state2str$(9) = "ptr2ref"
-     dim pstack%(1) : 'parent stack
+     pstate%("data")       = 7 : state2str$(7) = "data"
+     pstate%("on")         = 8 : state2str$(8) = "on" : 'kicks in after parsing "ON" (expr) "GOTO/GOSUB"
+     pstate%("for")        = 9 : state2str$(9) = "for": 'kicks in after TO
+
+     pstate%("ptr2ref")    =99 : state2str$(99) = "ptr2ref" : ' TODO unsure if this still gets used for anything
+     erase pstack% : 'parent stack
      pstack_i% = 1
      pstack%(pstack_i%) = pstate%("label")
 
      string_builder% = 0
 
      no_data% = 0
-     compiled_data$(1, 0) = "" : ' ERASE compiled_data$
+     erase compiled_data$
 
-     dim compiled$(1) : 'stack of compiled tokens (for RPN compilation)
+     erase compiled$ : 'stack of compiled tokens (for RPN compilation)
      compiled_c% = 0
 
-     dim expr_expect_stack%(1)
+     erase expr_expect_stack%
      expr_expect_c% = 0
 
      for ci% = 1 to len(inp$)
        ch$ = mid$(inp$,ci%,1)
        print th_sprintf$("=> ci=%-4d pstack_i=%-3d exprEXP(%d-1)=%s ", ci%, pstack_i%, expr_expect_c%, type2str$(expr_expect_stack%(expr_expect_c%-1)));
        for pstki=1 to pstack_i% : print state2str$(pstack%(pstki))+" "; : next pstki : print "ch="+ch$
-       if (pstack%(pstack_i%)=pstate%("expr")) and (mid$(inp$,ci%,1) = ":") then print "expr at end of statement, draining op stack then compiling": gosub 10900 : gosub 7400 : goto 7000
+       'if (pstack%(pstack_i%)=pstate%("expr")) and (mid$(inp$,ci%,1) = ":") then print "expr at end of statement, draining op stack then compiling"
+       if (pstack%(pstack_i%)=pstate%("expr")) and (mid$(inp$,ci%,1) = ":") then gosub 10900 : gosub 7400 : goto 7000
        if (pstack_i% = 2) and (mid$(inp$,ci%,1) = ":") then gosub 7400 : goto 7000
        if (pstack%(pstack_i%-1) = pstate%("statement")) and (mid$(inp$,ci%,1) = ":") then gosub 7400 : goto 7000
-       if (pstack%(pstack_i%) < 1) or (pstack%(pstack_i%) > 8) then print pstack%(pstack_i%) : stop
-       on pstack%(pstack_i%) gosub 7500, 8000, 10000, 11000, 9000, 12000, 10800, 13000
+       if (pstack%(pstack_i%) < 1) or (pstack%(pstack_i%) > 9) then print pstack%(pstack_i%) : stop
+       on pstack%(pstack_i%) gosub 7500, 8000, 10000, 11000, 9000, 12000, 13000, 14000, 15000
        if (pstack%(pstack_i%)=pstate%("expr")) and (ci%=len(inp$)) then print "expr at EOF", operator_c% : gosub 10900
        print th_sprintf$("<= ci=%-4d pstack_i=%-3d exprEXP(%d-1)=%s ",ci%,pstack_i%, expr_expect_c%, type2str$(expr_expect_stack%(expr_expect_c%-1)));
        for pstki=1 to pstack_i% : print state2str$(pstack%(pstki))+" "; : next pstki : print
 
 7000  next ci%
+     & "done with ci loop, about to hit last 7400 drain", compiled_c%
      gosub 7400
+     bytecode$ = bytecode$ + fntlv$(type_int%,"EOL") + fntlv$(type_opcode%, "#")
      if no_data% = 0 then RETURN : 'end of parsing
-     for di% = 1 to no_data%
+     print "bytecode with data is now", bytecode$
+     for di% = no_data% to 1 step -1
        print "COMPILED DATA:", di%, dr%, "=>", compiled_data$(di%, dr%)
        dr% = 0
        this$ = ""
-7050   if compiled_data$(di%, dr%) = "" then 7100
-       this$ = fntlv$(type_str%, compiled_data$(di%, dr%)) + this$
-       dr% = dr% + 1
-       goto 7050
-7100 bytecode$ = this$ + fntlv$(type_int%, dr%) + fntlv$(type_opcode%, "DATA") + bytecode$
+       for loop_7050 = 0 to 0 step 0
+       if compiled_data$(di%, dr%) <> "" then this$ = compiled_data$(di%, dr%) + this$ : dr% = dr% + 1 : next loop_7050
+     bytecode$ = this$ + fntlv$(type_int%, dr%) + fntlv$(type_opcode%, "DATA") + bytecode$
+     print "di%",di%,"bytecode",bytecode$
      next di%
      RETURN : ' end of parsing (with DATA)
 
 7400 'emit compile stack at end of statement parsing
-     'if pstack%(pstack_i%-1) <> pstate%("swap") then 7430
-     'compiled$(compiled_c%) = compiled$(compiled_c%-2)
-     'compiled$(compiled_c%-2) = fntlv$(type_opcode%, "SWAP")
-     'compiled_c% = compiled_c% + 1
-     'TODO
-     'pstack_i% = pstack_i%-1
-     'goto 7400
-     print "DEBUG: expr_expect_c%", expr_expect_c%
+     if (compiled_c%>1) and (compiled$(0) = fntlv$(type_opcode%,"NEXT")) and (fntyp%(compiled$(compiled_c%-1),1)=type_ptr%) then compiled$(compiled_c%-1)=fntlv$(type_ptrkey%,fnval$(compiled$(compiled_c%-1),1))
 7430 if (pstack_i%=3) and (pstack%(3)=pstate%("expr")) and (pstack%(2)=pstate%("statement") or pstack%(2)=pstate%("assignment")) then print "PSTACK", pstack_i%, pstack%(2), pstack%(3) : goto 7440 : 'unclosed parent
      if not ((pstack_i% > 2) and (compiled_c% > 0) and (fntyp%(compiled$(0),1)=type_opcode%) and (fnval$(compiled$(0),1)="IF")) then 7435
-       print "\\\\\\\\\\ IF: compiled (cond) ; IF ; statement2; ... ; until [label]"
+       'print "\\\\\\\\\\ IF: compiled (cond) ; IF ; statement2; ... ; until [label]"
        for ps=1 to pstack_i%:print state2str$(pstack%(ps)):next ps
        for c = 0 to compiled_c%-1
           print c, fnval$(compiled$(c),1)
        next
-       print type2str$(fntyp%(compiled$(0),1)),"FNVAL:",fnval$(compiled$(0),1)
+       'print type2str$(fntyp%(compiled$(0),1)),"FNVAL:",fnval$(compiled$(0),1)
        stop
-7435 if not ((pstack_i%=3) and (pstack%(3)=pstate%("data"))) then 7438
-        print "\\\\\ END OF DATA"
-        pstack_i% = pstack_i% - 1
-
-7438 if not ((pstack_i%=4) and pstack%(3)=pstate%("ptr2ref")) then 7439
+7435 if (pstack_i%=3) and (pstack%(3)=pstate%("data")) then pstack_i% = pstack_i% - 1: return : 'end of a DATA statement
+     if not ((pstack_i%=4) and pstack%(3)=pstate%("ptr2ref")) then 7440
      ' TODO this is some hacky shit right here, rewriting ptr to str.
      ' presently used in READ, but same problem exists in ASSIGNMENT, INPUT, etc where we want the literal ptr
      for c = 0 to compiled_c%
        if fntyp%(compiled$(c),1) = type_ptr% then compiled$(c) = fntlv$(type_str%, fnval$(compiled$(c),1))
      next
      'print "PTR2REF",compiled_c%
-     goto 7440
-7439 if pstack_i% <> 2 then print "PSTACK<>2",pstack_i% :for ps=1 to pstack_i%:print state2str$(pstack%(ps)):next ps: stop
-7440 if compiled_c% <= 1 then 7460
+7440 if compiled_c% < 2 then 7460
      print string$(40,"_")+"EMITTING COMPILED",compiled_c%
      for compile_i% = 1 to compiled_c%-1
-       print "infix_stack", infix_c%
-       print "","compiled:",fnval$(compiled$(compile_i%),1)
+       print "","compiled:",fnval$(compiled$(compile_i%),1), "ie:", compiled$(compile_i%)
        bytecode$ = bytecode$ + compiled$(compile_i%)
-       'if not infix_c% then 7460
-       'if not infix_at%(compile_i%) then 7460
-       'print infix_at%(compile_i%)-1, infix_stack$(0)
-       'bytecode$ = bytecode$ + infix_stack$(infix_at%(compile_i%)-1)
-       'infix_c% = infix_c% -1
      next compile_i%
-7460 bytecode$ = bytecode$ + compiled$(0)
+7460 if compiled_c% then bytecode$ = bytecode$ + compiled$(0)
      compiled_c% = 0
      pstack_i% = 1
      pstack%(pstack_i%) = pstate%("label")
      RETURN
-
+7465 'reloc from 7439 TODOTODO
+     if (pstack_i% = 5) and (pstack%(pstack_i%-2)=pstate%("on")) then & "its on"
+     if pstack_i% <> 2 then print "PSTACK<>2",pstack_i% :for ps=1 to pstack_i%:print ps,state2str$(pstack%(ps)):next ps: stop
 7500 'label parsing
      if fnwhitespace%(ci%) then RETURN
      if expr_expect_c% then print "WHY ARE WE EXPECTING things" : STOP
      label$ = ""
-7520 if fnnum%(ci%) then label$ = label$ + mid$(inp$, ci%, 1) : ci% = ci% + 1 : goto 7520
+     for labelagain = 0 to 0 step 0: if fnnum%(ci%) then label$ = label$ + mid$(inp$, ci%, 1) : ci% = ci% + 1 : next labelagain
      if label$ <> "" then bytecode$ = bytecode$ + fntlv$(type_int%, label$) + fntlv$(type_opcode%, "#")
      if label$ = "" then ci% = ci% -1 : ' we didn't find a label, so ci% point(ed) at first char of statement.
      pstack_i% = pstack_i% + 1
@@ -828,30 +888,46 @@ end
      lookahead$ = mid$(inp$, ci%, 10)
      'TODO in line with TH Basic and no doubt Dartmouth basic, we don't do look-ahead to determine
      'if found$ is at a word boundary (remoulade$ = 1 gets parsed as REM ....)
-     found$ = th_re$(lookahead$, "^(DATA|END|&|PRINT|SLEEP|GO\s*TO|GOSUB|RETURN|REM|READ|'|IF|TRON|TROFF)", 1, "i")
+     'TODO it would be nice to build this regex from our table of statements:
+     found$ = th_re$(lookahead$, "^(DATA|END|&|PRINT|SLEEP|GO\s*TO|GOSUB|TO|NEXT|RETURN|REM|READ|'|IF|ON|FOR|TRON|TROFF)", 1, "i")
      ' if it's not a statement keyword, it's either a syntax error or an assignment:
-     if found$ <> "" then 8500
-       compiled$(compiled_c%) = fntlv$(type_opcode%, "=")
-       compiled_c% = compiled_c + 1
-       pstack%(pstack_i%) = pstate%("assignment") : ' look for =
-       pstack_i% = pstack_i%+1
-       pstack%(pstack_i%) = pstate%("identifier") : 'look for LHS
-       ci%=ci%-1
-       return
-8500 found$ = UPS$(found$)
+     if found$ = "" then compiled$(compiled_c%) = fntlv$(type_opcode%, "=") : compiled_c% = compiled_c + 1
+     if found$ = "" then pstack%(pstack_i%) = pstate%("assignment") : ' look for =
+     if found$ = "" then pstack_i% = pstack_i%+1 : pstack%(pstack_i%) = pstate%("expr") : 'look for LHS
+     'if found$ = "" then pstack_i% = pstack_i%+1 : pstack%(pstack_i%) = pstate%("identifier") : 'look for LHS
+     if found$ = "" then ci%=ci%-1 : return
+     found$ = UPS$(found$) : 'helps with RE being case-insensitive, is that needed?
      if (found$ = "REM") or (found$="'") then ci%=len(inp$) : RETURN : 'comment to the end of the line TODO
      print "statement:", ci%, found$
      opname$ = str2op$(th_sed$(found$, "\s+", "", "g")) : 'go to -> GOTO
+     if not statement(opname$) then print "not a statement: "+found$,opname$: stop
      if opname$ = "" then STOP : 'didn't find this operator
      ci% = ci% + len(found$) -1
      
-     if opname$ <> "DATA" then 8700
-       ' DATA gets pushed in front of the program
-       no_data% = no_data% + 1 : rec_data% = 0 : compiled_data$(no_data%, rec_data%) = ""
-       pstack_i% = pstack_i% + 1
-       pstack%(pstack_i%) = pstate%("data")
-       RETURN
-8700 print "STATEMENT-COMPILED_C%",compiled_c%
+     'FOR parses: "FOR" [assignment] "TO" [expr1] ?STEP expr2?
+     'to AST: LABEL [assignment.lhs_key$] [assignment]
+     'and registers "NEXT" [lhs_key$] as lhs_key$=lhs_key$+expr2: ON (lhs_key$ <= [expr]) GOTO [lhs_key$]
+     'that means we need to implement ON..GOTO first, TODO
+     REM assignment:
+     REM compiled$() = fntlv$(type_str%, lhs_key%) : ' textual lines?
+     REM compiled$() = fntlv$(type_opcode%, "#")
+     REM ...
+     REM compiled$() = fntlv$(type_int%, ) : 'arity of assignment
+     REM compiled$() = fntlv$(type_opcode%, ":=")
+     REM
+     REM compiled$() = lhs_key$ :' this needs to be the ptr to the lhs_key$, might be easier to just generate a deterministic id for the FOR based on tape offset or w/ever
+     REM compiled$() = expr
+     REM compiled$() = fntlv$(type_opcode%, "<=")
+     REM lhs_key$ :'todo need to make sure this works for strings
+     REM ON
+     if opname$ = "FOR" then & "parsing FOR, letting it fall through to TO"
+     if opname$ = "FOR" then compiled$(compiled_c%) = fntlv$(type_opcode%, "=") : compiled_c% = compiled_c + 1
+     if opname$ = "FOR" then pstack_i%=pstack_i%+3:pstack%(pstack_i%-2)=pstate%("for"):pstack%(pstack_i%-1)=pstate%("assignment"):pstack%(pstack_i%)=pstate%("expr"):return
+     ' DATA gets pushed in front of the program:
+     if opname$ = "DATA" then no_data% = no_data% + 1 : rec_data% = 0 : compiled_data$(no_data%, rec_data%) = ""
+     if opname$ = "DATA" then pstack_i% = pstack_i% + 1 : pstack%(pstack_i%) = pstate%("data") : RETURN
+     if opname$ = "ON" then pstack_i% = pstack_i% + 1: pstack%(pstack_i%) = pstate%("on")
+     print "STATEMENT-COMPILED_C%",compiled_c%
      compiled$(compiled_c%) = fntlv$(type_opcode%, opname$)
      compiled_c% = compiled_c% + 1
      pstack_i% = pstack_i% + 1
@@ -861,46 +937,71 @@ end
      RETURN
 9000 'assignment
      if fnwhitespace%(ci%) then RETURN
-     if mid$(inp$, ci%, 1) <> "=" then STOP : 'expect = here
+     ' There's a grammar conflict here where
+     'a(1)=2 ends up as [a] [(1)==2]
+     'if ch$ = "(" then expr_expect_stack%(expr_expect_c%) = type_int%: expr_expect_c% = expr_expect_c% + 1
+     'if ch$ = "(" then pstack_i%=pstack_i%+1:pstack%(pstack_i%) = pstate%("expr"): ci%=ci%-1:RETURN
+     'going to tack it onto the identifer parser instead
+     if ch$ <> "=" then STOP : 'expect = here
      'LHS has just been compiled to a ptr%, but we are not dereferencing it when assigning,
      'so we need to fix that:
-     if fntyp%(compiled$(compiled_c%-1),1) <> type_ptr% then STOP : 'expected an identifier ptr
+     & "assignment opc", operator_c%
+     if compiled$(0) <> fntlv$(type_opcode%, "=" ) then print "assignment without =", compiled$(0), compiled$(1), compiled_c%:stop
+     if compiled_c% < 2 then stop : ' UNREACH, assignment arity is missing
+     arity = val(fnval$(compiled$(compiled_c%-2),1))
+     & "in assignment opc:"+str$(operator_c%) +" compiled_c%:"+str$(compiled_c%)
+     'if compiled_c% > 4 then arity=arity: compiled$(compiled_c%-2) = fntlv$(type_int%, arity)
+     last_assignment_offset = compiled_c% ' this gets reused for for-loops, which is kind of hacky.
+     & "assignment =>", "arity:"+str$(arity),"compiled:"+str$(compiled_c%), "assoff:"+str$(last_assignment_offset)
+     for c = 0 to compiled_c%-1
+        & "assignment:: ", c, compiled$(c)
+     next c
+9050 if fntyp%(compiled$(compiled_c%-1),1) <> type_ptr% then & compiled_c%, type2str$(fntyp%(compiled$(2),1)) : STOP : 'expected an identifier ptr
      identifier$ = fnval$(compiled$(compiled_c%-1),1)
      compiled$(compiled_c%-1) = fntlv$(type_str%, identifier$)
+     ' 0: =
+     ' 1: arity, 0=variable, 1<=array
+     ' 2: base name of array/variable
+     ' need to compile this stuff in reverse
      'now find RHS:
-     pstack%(pstack_i%) = pstate%("expr") : ' TODO add to expr_expect stack
+     pstack%(pstack_i%) = pstate%("expr")
      print "assignLHS", right$(identifier$,1)
      expr_expect_stack%(expr_expect_c%) = type_int% : expr_expect_c% = expr_expect_c% + 1
      if right$(identifier$,1) = "$" then expr_expect_stack%(expr_expect_c%-1) = type_str%
      return
 10000 'expr
-      if fnwhitespace%(ci%) then RETURN
-      dim expr_stack$(1)
+      if fnwhitespace%(ci%) then return
       expr_stack_c% = 0
-      ch$ = mid$(inp$, ci%, 1)
-      print "expr:"+ch$
-      if ch$ <> "(" then 10028
-        print "pushing ( to operator stack"
-        comma_stack%(operator_c%) = 0
-        operator_stack$(operator_c%) = "(": operator_c% = operator_c% + 1
-        expr_expect_stack%(expr_expect_c%) = type_int% : expr_expect_c% = expr_expect_c% + 1
-        RETURN
-10028 if (ch$ <> ")") then 10050 : 'unbalanced )
-      print "close when expecting:",type2str$(expr_expect_stack%(expr_expect_c% -1))
-      if expr_expect_stack%(expr_expect_c% -1) <> type_opcode% then print "close) when expecting value" : stop
-10030 if not operator_c% then STOP : 'unbalanced right-)
+10010 ch$ = mid$(inp$, ci%, 1)
+      'print "expr:"+ch$
+      'if ch$ = "(" then print "pushing ( to operator stack"
+        if ch$ = "(" then & "open bracket when last was", operator_c%, operator_stack$(operator_c%-1)
+        if ch$ = "(" then comma_stack%(operator_c%) = 0
+        if ch$ = "(" then operator_stack$(operator_c%) = "(": operator_c% = operator_c% + 1
+        ' if previous token was a ptr% then this is an array: fntyp%(operator_stack$(operator_c%-2),1) = type_ptr%
+        if ch$ = "(" then expr_expect_stack%(expr_expect_c%) = type_int% : expr_expect_c% = expr_expect_c% + 1
+        if ch$ = "(" then RETURN
+      if (ch$ <> ")") then 10050 : 'unbalanced )
+      if ch$ = ")" then if expr_expect_stack%(expr_expect_c% -1) <> type_opcode% then print "close-')' when expecting:",type2str$(expr_expect_stack%(expr_expect_c% -1)): stop
+      for loop_10030 = 0 to 0 step 0
+      if not operator_c% then print "unbalanced right-')'",operator_c% : STOP
       ' case: ch$ is a ) closing bracket
-           print "first)", operator_c%, operator_stack$(operator_c% - 1)
-           if operator_stack$(operator_c%-1) = "(" then 10040
-           if 9 <> precedence%(operator_stack$(operator_c%-1)) then 10035
-              print "prec 9 so output arity operand: ",comma_stack%(operator_c%-1)
-              compiled$(compiled_c%) = fntlv$(type_int%, comma_stack%(operator_c%-1)): compiled_c% = compiled_c% + 1
-              comma_stack%(operator_c%-1) = 0
-10035      print "output:"+operator_stack$(operator_c% - 1)
-           compiled$(compiled_c%) = fntlv$(type_opcode%, operator_stack$(operator_c%-1)) : compiled_c% = compiled_c% + 1
+           'print "first)", operator_c%, operator_stack$(operator_c% - 1)
+           lastop$ = operator_stack$(operator_c%-1)
+           if lastop$ = "(" then 10040
+           if lastop$ = "" then stop
+           'if 9 = precedence%(operator_stack$(operator_c%-1)) then print "prec 9 so output arity operand: ",comma_stack%(operator_c%-1)
+           if fn_has_arity(lastop$) then compiled$(compiled_c%) = fntlv$(type_int%, comma_stack%(operator_c%-1))
+           if fn_has_arity(lastop$) then & "lastop has arity, compiling:", compiled$(compiled_c%)
+           if fn_has_arity(lastop$) then compiled_c% = compiled_c% + 1: comma_stack%(operator_c%-1) = 0
+           if fntyp%(lastop$,1)  = type_ptr% then & "  compiling ptr",lastop$,len(lastop$) : compiled$(compiled_c%) = lastop$
+           if fntyp%(lastop$,1) <> type_ptr% then & "  compiling op",lastop$:compiled$(compiled_c%) = fntlv$(type_opcode%, lastop$)
+           print "output:"+compiled$(compiled_c%), type2str$(fntyp%(lastop$,1)), "witharity:"+str$(fn_has_arity(lastop$))
+           compiled_c% = compiled_c% + 1
            operator_c% = operator_c% - 1
-           goto 10030
-10040      print "in )",operator_c%, operator_stack$(operator_c%-1)
+           if (operator_c% = 0) and fntyp%(lastop$,1) = type_ptr% then & "TODOTODO this is a hack: early return when ptr met on close-), why??": return
+           next loop_10030
+10040      print "in )",operator_c%, operator_stack$(operator_c%-1), operator_stack$(operator_c%-2)
            if operator_stack$(operator_c%-1)  <> "(" then stop : 'unbalanced right )
            operator_c% = operator_c% - 1 : 'pop left (
            'if (not operator_c%) and (expr_expect_c% <> 1) then print "TODO can this happen, no operator_c in nested expr?": stop
@@ -913,43 +1014,55 @@ end
            'compiled$(compiled_c%) = fntlv$(type_opcode%, operator_stack$(operator_c%-1))
            'operator_c% = operator_c% - 1
            'compiled_c% = compiled_c% + 1
+           ' TODO stop here?
            return
 10050      if not ((ch$ = ",")) then 10100
         ' comma encountered while parsing an expression. this could be starting
         ' a new expression in an operand list, or a syntax error
+      for drain_after_10050 = 0 to 1
+      if drain_after_10050 then gosub 10900: expr_expect_stack%(0) = type_int% : expr_expect_c% = 1: return
       if pstack%(pstack_i%-1) = pstate%("expr") then print "COMMA INSIDE EXPRESSION" : stop : 'that's a syntax error
-      if pstack%(pstack_i%-1) = pstate%("assignment") then print "COMMA AFTER ASSIGNMENT" : stop
+      if (operator_c% = 0) and (pstack%(pstack_i%-1) = pstate%("assignment")) then print "COMMA AFTER ASSIGNMENT", operator_c% : stop
+      if pstack%(pstack_i%-1) = pstate%("assignment") then & "10050:comma in assignment": goto 10070
       if pstack%(pstack_i%-1) = pstate%("ptr2ref") then print "COMMA IN ptr2ref",compiled$(compiled_c%-1):compiled$(compiled_c%)=fntlv$(type_str%,fnval$(compiled$(compiled_c%-1),1)):gosub 10900:return
-      if pstack%(pstack_i%-1) <> pstate%("statement") then stop
-      print "comma in statement, draining stack"
+      if pstack%(pstack_i%-1) = pstate%("on") then print "comma in ON..GO(TO|SUB)": next drain_after_10050
+      if pstack%(pstack_i%-1) <> pstate%("statement") then print pstack_i%, pstack%(pstack_i%-1): stop
+      next drain_after_10050
+
+10070 'comma encountered in assignment -> expr
       gosub 10900
-      expr_expect_stack%(0)=type_int%:expr_expect_c% = 1
+      & "assignment compiled_c%",compiled_c%, "comma_stack(0):", comma_stack%(0)
+      expr_expect_c% = 1
+      expr_expect_stack%(expr_expect_c%-1) = type_int%
       return
       
 10100 ' TODO check that () isn't an empty expr
-      print "not () expr:"+ch$,"op stack height:",operator_c%
+      'print "not () expr:"+ch$,"op stack height:",operator_c%
       'TODO if this we have not emitted anything, an infix operator here is a syntax error.
       'TODO if the last thing we emitted was a value, another value is a syntax error.
       if (ch$ = ")") then stop :' pstack_i% = pstack_i% - 1 : RETURN : 'close expr
       if ch$ = quot$ then pstack_i% = pstack_i% + 1 : pstack%(pstack_i%) = pstate%("string") : string_builder% = ci%+1 : RETURN
       ' it might be an int:
       lookahead$ = ups$(mid$(inp$, ci%, 20))
+      foundhex$ = th_re$(lookahead$, "^&([0-9A-F]+)", 2) : 'GW-BASIC style hex number
       found$ = th_re$(lookahead$, "^\d+\.?\d*", 1)
-      if found$ = "" then 10200
+      if found$+foundhex$ = "" then 10200
          ' found an int, put it on compile stack
          if expr_expect_stack%(expr_expect_c%-1) <> type_int% then print "NOT EXPECTING VAL ", found$, expr_expect_stack%(expr_expect_c%-1), expr_expect_c%:STOP : 'not expecting value
          'if expr_expect_stack%(expr_expect_c%-1) = type_opcode% then print "expecting operator got int", expr_expect_c%: stop
          expr_expect_stack%(expr_expect_c%-1) = type_opcode%
-         print "output int:"+found$
+         if foundhex$ <> "" then found$ = th_sprintf$("%y", foundhex$) : ci% = ci% + 1
+         ci% = ci% + len(found$) -1
+         'print "output int:"+found$, string$(foundhex$<>"", "(&HEX)")
          compiled$(compiled_c%) = fntlv$(type_int%, found$)
          compiled_c% = compiled_c% + 1
-         ci%=ci%+len(found$)-1
          RETURN
       'it's not a string, it's not an int, it COULD BE infix operator OR identifier:
 10200 operator_re$ = "^ *(AND|OR|XOR|MOD|NOT|IMP|EQV|<>|<=|=<|>=|=>|\*\*|[=+/*^<>-])"
       found$ = th_re$(lookahead$, operator_re$, 2)
       if found$ = "" then 10500
       found_len% = len(th_re$(lookahead$, operator_re$, 1))
+      if (found$ = "=") and (pstack%(pstack_i%-1)=pstate%("assignment")) and (expr_expect_c%=0) then & "pretty SURE THIS IS :=", expr_expect_c%, operator_c%: pstack_i%=pstack_i%-1:ci%=ci%-1:gosub 10900:return
       if found$ = "=" then found$ = "==" : 'disambiguate comparison from assignment
       if found$ = "**" then found$ = "^" : 'alias for ^
       ci% = ci% + found_len% - 1
@@ -959,160 +1072,249 @@ end
       '         ( AND ( (o2 has greater precedence than o1)
       '         (        or (o1 and o2 have same precedence AND o1 is left-associative))
       ' - pop o2 from operator stack into output queue:
-10250 goto 10300 : 'if not (operator_c% and (operator_stack$(operator_c%-1) <> "(")) then print "skip 10250",operator_c% : goto 10300
-      top$ = operator_stack$(operator_c%-1)
-      print th_sprintf$("op stack height:%-3d  found=%s  top=%s", operator_c%, found$, top$)
-      print th_sprintf$("todo compare %s(%d) and %s(%d)",found$,precedence%(found$),top$,precedence%(top$))
-      'operator_c% = operator_c% -1
-      'compiled$(compiled_c%) = fntlv$(type_opcode%, top$) : compiled_c% = compiled_c% + 1
-      print "compiled o2:"+top$+" o1:"+found$
-      operator_stack$(operator_c%) = found$ : operator_c% = operator_c% + 1
-      'compiled$(compiled_c%) = fntlv$(type_opcode%, found$) : compiled_c% = compiled_c% + 1
-'operator_c% = operator_c% -1
-'compiled$(compiled_c%) = fntlv$(type_opcode%, top$) : compiled_c% = compiled_c% + 1
-
-      'print "opstack pushing "+found$
-      'operator_stack$(operator_c%) = found$ : operator_c% = operator_c% + 1
-      return : 'stop
-      goto 10250
-10300 if operator_c% then 10400
-      print "no opers on stack but found and push:"+found$, expr_expect_stack%(expr_expect_c%-1), expr_expect_c%
-      if expr_expect_stack%(expr_expect_c%-1) = type_opcode% then 10350
+      for opstack_empty_10300 = 0 to 0 step 0
+      if operator_c% then 10400
+      if found$="==" and expr_expect_c%=0 then pstack_i%=pstack_i%-1: ci%=ci%-1:return : 'plain assignment ? TODO
+      if found$="==" and (expr_expect_c%=1 and operator_stack$(operator_c%)="(") then pstack_i%=pstack_i%-1:ci%=ci%-1:return : 'plain assignment?
+      'print "no opers on stack but found and push:"+found$, expr_expect_stack%(expr_expect_c%-1), expr_expect_c%
+      if expr_expect_stack%(expr_expect_c%-1) = type_opcode% then operator_stack$(operator_c%) = found$ : operator_c% = operator_c% + 1
+      if expr_expect_stack%(expr_expect_c%-1) = type_opcode% then expr_expect_stack%(expr_expect_c%-1) = type_int%: return
         if found$ = "-" then operator_stack$(operator_c%) = "~-" : operator_c% = operator_c% + 1: return
         if found$ = "NOT" then operator_stack$(operator_c%) = "NOT" : operator_c% = operator_c% + 1 : return
-        print "expected value got operator:"+found$
-        stop
-10350 operator_stack$(operator_c%) = found$ : operator_c% = operator_c% + 1
-      expr_expect_stack%(expr_expect_c%-1) = type_int%
-      return
+        print "expected value got operator:"+found$ : stop
+
 10400 top$ = operator_stack$(operator_c%-1)
       print th_sprintf$("OP IS AN OPERATOR:[%d]:%s:(%d)  stack top[%d]:%s:(%d)", len(found$), found$,precedence%(found$), len(top$), top$,precedence%(top$))
       ' TODO this here is a mess, should use lookup tables instead of hardcoding the operators:
       dopop = 0
-      if precedence%(found$) = 0 then stop
-      if precedence%(top$)   = 0 then stop
-      if precedence%(found$) <= precedence%(top$) then dopop = 1
-      if precedence%(found$) > precedence%(top$) then dopop = -1
-      if (dopop = 0) and (found$ <> "^") then dopop = 1 : print "equal precedence level, "+found$+" is left-associative."
-      if dopop then print "precedence: ",found$+string$(dopop=1," <= ")+string$(dopop=-1, " > ")+top$
+      ' 9: is the precedence of functions:
+      precedence_found% = precedence%(found$) + 9*(fntyp%(found$,1) = type_ptr%)
+      precedence_top%   = precedence%(top$)   + 9*(fntyp%(top$,1)   = type_ptr%)
+      if precedence_found% = 0 then stop : ' TOOD can found$ ever be a ptr%? then we have to fixup precedence for that too
+      if precedence_top%   = 0 then stop
+      if precedence_found% <= precedence_top% then dopop = 1
+      if precedence_found% > precedence_top% then dopop = -1
+      if (dopop = 0) and (found$ <> "^") then dopop = 1 : 'print "equal precedence level, "+found$+" is left-associative."
+      'if dopop then print "precedence: ",found$+string$(dopop=1," <= ")+string$(dopop=-1, " > ")+top$
       if found$ = "NOT" then print "GOTNOT dopop <- -1, dopop=", dopop : dopop=-1
-      if (found$ = "-") and (expr_expect_stack%(expr_expect_c%-1) = type_int%) then print "FOUNDMINUS ----------- expecting int%":operator_stack$(operator_c%)="~-":operator_c%=operator_c%+1:return
+      if (found$ = "-") and (expr_expect_stack%(expr_expect_c%-1) = type_int%) then operator_stack$(operator_c%)="~-":operator_c%=operator_c%+1:return
       if top$ = "(" then dopop = -1
       'if top$ = "^" then dopop = -1 : print "NOT POPPING ^ BECAUSE IT IS RIGHT-ASSOCIATIVE"
       if dopop = 0 then stop
-      if (dopop=1) and (top$ <> "(") and (9 = precedence%(top$)) then compiled$(compiled_c%) = fntlv$(type_int%, comma_stack%(operator_c%-1)): compiled_c% = compiled_c% + 1 : comma_stack%(operator_c%-1) =0
-      if (dopop=1) and (top$ <> "(") then print "   emitting "+top$ :compiled$(compiled_c%) = fntlv$(type_opcode%, top$) : compiled_c% = compiled_c% + 1 : operator_c% = operator_c% - 1 : goto 10300
-      'TODO gosub 10300
-      if expr_expect_stack%(expr_expect_c%-1) = type_opcode% then 10450
-        if found$ = "-" then print "UNARY MINUS": operator_stack$(operator_c%) = "~-" : operator_c% = operator_c% + 1: return
-        if found$ = "NOT" then print "UNARY NOT": operator_stack$(operator_c%) = "NOT" : operator_c% = operator_c% + 1: return
-        print "expect value got operator",found$ :stop
-10450 operator_stack$(operator_c%) = found$ : operator_c% = operator_c% + 1
-      expr_expect_stack%(expr_expect_c%-1) = type_int%
-      print "op stack pushed:"+found$
-      return
+      if (dopop=1) and (top$ <> "(") and fn_has_arity(top$) then &"out1":compiled$(compiled_c%) = fntlv$(type_int%, comma_stack%(operator_c%-1)): compiled_c% = compiled_c% + 1 : comma_stack%(operator_c%-1) =0
+      'if (dopop=1) and (top$ <> "(") then print "   emitting "+top$
+      if (dopop=1) and (top$ <> "(") then if fntyp%(top$,1)<>type_ptr% then & "  dopop(f):"top$:compiled$(compiled_c%) = fntlv$(type_opcode%, top$)
+      if (dopop=1) and (top$ <> "(") then if fntyp%(top$,1)=type_ptr% then & "  dopop(a):"top$:compiled$(compiled_c%) = top$
+      if (dopop=1) and (top$ <> "(") then compiled_c% = compiled_c% + 1 : operator_c% = operator_c% - 1 : next opstack_empty_10300
+      if expr_expect_stack%(expr_expect_c%-1) = type_opcode% then operator_stack$(operator_c%) = found$ : operator_c% = operator_c% + 1 : expr_expect_stack%(expr_expect_c%-1) = type_int% : return
+      if found$ = "-" then operator_stack$(operator_c%) = "~-" : operator_c% = operator_c% + 1: return : 'unary MINUS
+      if found$ = "NOT" then operator_stack$(operator_c%) = "NOT" : operator_c% = operator_c% + 1: return : 'unary NOT
+      if (found$ = "==") and (pstack%(pstack_i%-1)=pstate%("assignment")) then & "looks like assignment from inside expr": return
+      print "expect value got operator",found$ :stop
 
 10500 'it's not a string, and it's not an integer. could be a identifier or a colon or a THEN (if we are in an IF)
-      if operator_c% = 0 then print "OPERATOR STACK EMPTY, if "+quot$+found$+quot$+"is a keyword then terminate expr, expr_expect:",expr_expect_stack%(expr_expect_c%-1), expr_expect_c%
+      'if operator_c% = 0 then print "OPERATOR STACK EMPTY, if "+quot$+found$+quot$+"is a keyword then terminate expr, expr_expect:",expr_expect_stack%(expr_expect_c%-1), expr_expect_c%
       lookahead$ = ups$(mid$(inp$, ci%, 20))
-      func$ = th_re$(lookahead$, "^(SIN|COS|ABS|ATN|ASC|BIN\$|CHR\$|CINT|CSNG|INT|ITM|LEFT\$|LEN|MID\$|FN[A-Z0-9_]+[!$%]|RIGHT\$|VAL)\(", 2)
-      print "INFIX STACK", infix_c%, ch$, found$, func$
+      func$ = th_re$(lookahead$, "^(SIN|COS|ABS|ATN|ASC|BIN\$|CHR\$|CINT|CSNG|INT|ITM|LEFT\$|LEN|MID\$|FN[A-Z0-9_]+[!$%]|RIGHT\$|RND|VAL)\(", 2)
+      'print "INFIX STACK", infix_c%, ch$, found$, func$
       if (func$ <> "") and expr_expect_stack%(expr_expect_c%-1) = type_opcode% then print "expected infix operator, got function:"+func$:stop
-      if func$ <> "" then print "is a function", func$: operator_stack$(operator_c%)=func$:operator_c% = operator_c% + 1 : ci% = ci% + len(func$)-1: return
+      'if func$ <> "" then print "is a function", func$
+      if func$ <> "" then operator_stack$(operator_c%)=func$:operator_c% = operator_c% + 1 : ci% = ci% + len(func$)-1: return
       if left$(lookahead$,4) <> "THEN" then 10560
-        print "THEN ENCOUNTERED", pstack_i%, operator_c%, infix_c%, pstack%(pstack_i%)
-        if expr_expect_c% and (expr_expect_stack%(expr_expect_c%-1) <> type_opcode%) then print expr_expect_stack%(expr_expect_c%-1): STOP
+        'print "THEN ENCOUNTERED", pstack_i%, operator_c%, infix_c%, pstack%(pstack_i%)
+        if (expr_expect_c%<>0) and (expr_expect_stack%(expr_expect_c%-1) <> type_opcode%) then print expr_expect_stack%(expr_expect_c%-1): STOP
         if infix_c% <> 0 then print "INFIX_C% <> 0": stop : 'what
         gosub 10900 : 'drain operator stack of the cond expr
         gosub 7400  : 'compile the cond expr and the IF operator
         ci% = ci% -1 + len("THEN")
         return
-10560  if not ((ch$ = ":") and (0 < infix_c%)) then 10600
-         print "Piling up infix", operator_stack$(operator_c%-1)
-         'compiled$(compiled_c%) = infix_stack$(infix_c%-1)
-         'infix_c% = infix_c% - 1
-         'compiled_c% = compiled_c% + 1
-         ci% = ci% - 1
-         pstack_i% = pstack_i% - 1
-         return
-10600 ' TODO could also be a function call
+10560  if (ch$ = ":") and (0 < infix_c%) then print "Piling up infix", operator_stack$(operator_c%-1) : ci% = ci% - 1 : pstack_i% = pstack_i% - 1 : return
+      ' TODO could also be a function call?
       pstack_i% = pstack_i% + 1
       pstack%(pstack_i%) = pstate%("identifier")
-      print "EXPR LOOKING FOR IDENTIFIER",ci%,quot$+mid$(inp$,ci%,1)+quot$
+      'print "EXPR LOOKING FOR IDENTIFIER",ci%,quot$+mid$(inp$,ci%,1)+quot$
       'if expr_expect_stack%(expr_expect_c%-1) = type_opcode% then print "looking for operator got identifier?": stop
-      if expr_expect_stack%(expr_expect_c%-1) <> type_int% then print "  EXPR EXPECT",expr_expect_c%,expr_expect_stack%(expr_expect_c%-1)
+      'if expr_expect_stack%(expr_expect_c%-1) <> type_int% then print "  EXPR EXPECT",expr_expect_c%,expr_expect_stack%(expr_expect_c%-1)
       expr_expect_stack%(expr_expect_c%-1) = type_int%
       ci% = ci% - 1
       RETURN
-10800 'infix
-      PRINT "fixing INFIX TODO", operator_c%
-      stop
-      return
-10900 if (not operator_c%) then expr_expect_c% = 0 : RETURN
+10900 if (not operator_c%) and (pstack%(pstack_i%-1)=pstate%("for")) and (comma_stack%(0)=1) then & "for in pstack",compiled_c%,comma_stack%(0):for i=0 to compiled_c%:& i,compiled$(compiled_c%)::goto 15000
+      if (not operator_c%) then & "10900: opc empty":expr_expect_c% = 0 : RETURN
       top$ = operator_stack$(operator_c%-1)
-      if top$ <> "(" then 10950
+      & "at 10900 with top" top$
+      if top$ <> "(" then & "top is" top$,"opc:"+str$(operator_c%):goto 10950
       ' precedence =9 is for functions:
       pretop$ = operator_stack$(operator_c%-2)
-      if (operator_c% < 1) or (9<>precedence%(pretop$)) then 10940
-      ' TODO tron: print mid$("a",1,2,3)
+      if (operator_c% < 1) or (not fn_has_arity(pretop$)) then for i = operator_c%-1 to 0 step -1: PRINT operator_stack$(i): next i
+      if (operator_c% < 1) or (not fn_has_arity(pretop$)) then print "UNMATCHED '('": STOP
+      & "trying to fix up comma_stack in opc-2",operator_c%-2,str$(comma_stack%(operator_c%-2))+"+=1"
       comma_stack%(operator_c%-2) = comma_stack%(operator_c%-2) + 1
       if opmax%(pretop$) and (opmax%(pretop$) <= comma_stack%(operator_c%-2)) then print pretop$+"/"+str$(opmax%(pretop$))+": too many arguments": STOP
-      expr_expect_stack%(expr_expect_c%-1) = type_int%
-      print "at comma, before ( on op stack is",pretop$,"which is a function. commas:",comma_stack%(operator_c%-2)
+      if expr_expect_c% then expr_expect_stack%(expr_expect_c%-1) = type_int%
+      'print "at comma, before ( on op stack is",pretop$,"which is a function. commas:",comma_stack%(operator_c%-2)
       return
-10940 for i = operator_c%-1 to 0 step -1
-        print operator_stack$(i)
-      next i
-      print "UNMATCHED '('" : STOP
 10950 print "end opstack ",operator_c%,top$
-      if expr_expect_c% and (expr_expect_stack%(expr_expect_c%-1) = type_int%) then print "at end of expr looking for int":stop
-      if expr_expect_c% then expr_expect_c% = expr_expect_c% - 1
-      if expr_expect_c% then print "last expr expect", expr_expect_c%
-      if 9 = precedence%(top$) then print "WAS FUNC ",top$," with COMMA STACK ",comma_stack%(operator_c%-1)
-      if 9 = precedence%(top$) then compiled$(compiled_c%) = fntlv$(type_int%, comma_stack%(operator_c%-1))
-      if 9 = precedence%(top$) then compiled_c% = compiled_c% + 1 : comma_stack%(operator_c%-1) = 0
-      compiled$(compiled_c%) = fntlv$(type_opcode%, top$)
+      if (expr_expect_c%<>0) and (expr_expect_stack%(expr_expect_c%-1) = type_int%) then print "at end of expr looking for int":stop
+      expr_expect_c% = expr_expect_c% - (expr_expect_c% <>0 )
+      'if expr_expect_c% then print "last expr expect", expr_expect_c%
+      'if 9 = precedence%(top$) then print "WAS FUNC ",top$," with COMMA STACK ",comma_stack%(operator_c%-1)
+      if fn_has_arity(top$) then compiled$(compiled_c%) = fntlv$(type_int%, comma_stack%(operator_c%-1))
+      if fn_has_arity(top$) then compiled_c% = compiled_c% + 1 : comma_stack%(operator_c%-1) = 0
+      if fntyp%(top$,1) = type_ptr% then & "    opstack end ptr:" top$: compiled$(compiled_c%) = top$
+      if fntyp%(top$,1)<> type_ptr% then & "    opstack end func" top$: compiled$(compiled_c%) = fntlv$(type_opcode%, top$)
       compiled_c% = compiled_c% + 1 : operator_c% = operator_c% - 1
       GOTO 10900
 11000 'string
       if ch$ <> quot$ then RETURN : 'next char
       string_builder$ = mid$(inp$, string_builder%, ci% - string_builder%)
       pstack_i% = pstack_i% - 1
-      if pstack%(pstack_i%) <> pstate%("expr") then goto 11200
+      if pstack%(pstack_i%) = pstate%("data") then compiled_data$(no_data%, rec_data%) = fntlv$(type_str%, string_builder$)
+      if pstack%(pstack_i%) = pstate%("data") then compiled_data$(no_data%, rec_data%+1) = "": RETURN
+      if pstack%(pstack_i%) <> pstate%("expr") then STOP : ' end of string, but not parsing string/DATA
         compiled$(compiled_c%) = fntlv$(type_str%, string_builder$)
         compiled_c% = compiled_c% + 1
         expr_expect_stack%(expr_expect_c%-1) = type_opcode%
         RETURN
-11200 if pstack%(pstack_i%) <> pstate%("data") then STOP : 'how did we end up here?
-        print "END OF STR PARSING FOR DATA no:",no_data%,"rec:",rec_data%,"payload:",ci%-string_builder%,string_builder$
-        compiled_data$(no_data%, rec_data%) = fntlv$(type_str%, string_builder$)
-        compiled_data$(no_data%, rec_data%+1) = ""
-      RETURN
 12000 'identifier
       if fnwhitespace%(ci%) then RETURN
-      print "IDENTIFIER LOOKING"
+      'print "IDENTIFIER LOOKING"
       ch$ = mid$(inp$, ci%, 1)
       if not th_re(ch$, "^[A-Za-z_]", 1) then print quot$+ch$+quot$: STOP : 'not valid identifier start char
-      for id% = ci%+1 to len(inp$) : ' len(tape$)
+      lastid% = ci%+1
+      for id% = ci%+1 to len(inp$)
         ch$ = mid$(inp$, id%, 1)
-        if not th_re(ch$, "^[a-z_0-9$%!]", 1) then done : goto 12200 : 'end of plain identifier
-      next id%
-12200 id$ = mid$(inp$,ci%, id%-ci%)
+        if th_re(ch$, "^[a-z_0-9$%!]", 1) then next id%
+      id$ = mid$(inp$,ci%, id%-ci%)
       ci% = id%-1
-      'print "id="+id$+". next=" + mid$(inp$,ci%,1)
-      ' TODO no support for arrays yet
-      if expr_expect_c% and (expr_expect_stack%(expr_expect_c%-1) = type_opcode%) then print "got identifier but looked for opcode":stop
-      if expr_expect_c% and (expr_expect_stack%(expr_expect_c%-1) = type_int%) then expr_expect_stack%(expr_expect_c%-1) = type_opcode%
-      compiled$(compiled_c%) = fntlv$(type_ptr%, id$)
-      compiled_c% = compiled_c% + 1
+      'here we need to skip whitespace such that chnext$="(" or chnext$="=", otherwise
+      'a   (1) =2  will have array arity 0
+      for i = ci% to len(inp$)
+      chnext$ = mid$(inp$,i+1,1) : if chnext$=" " then next i
+      ci% = i
+      print "id="+id$+". next=" + mid$(inp$,ci%+1,1),  expr_expect_stack%(expr_expect_c%-1) 
+
+      'TODO we could conceivably end up here inside an (invalid) expr like ON ((((1=GOTO)+2 GOTO where we should
+      'TODO emit a syntax error, but for now we are going to accept identifiers with reserved names, ie they are not reserved.
+      'TODO we could state IF statement(id$) THEN & "RESERVED KEYWORD": STOP but not sure if we rely on id parsing elsewhere:
+      if pstack%(pstack_i%-2) = pstate%("on") then if id$="GO" then stop ' TODO need to figure out if it's GO SUB or GO TO
+      di$ = id$ : ' work around PED bug where it shows id$ as mid$, 2024-05-14
+      di$ = ups$(di$) : 'uppercase it because hash table lookups are case-sensitive
+      ' Add a fake comma and 
+      isgoing = (pstack%(pstack_i%-2) = pstate%("on")) and (di$="GOTO" or di$="GOSUB") and (expr_expect_c%<=2)
+      & "isgoing exprc opc compc di$ pstack-2", isgoing, expr_expect_c%, operator_c%, compiled_c%, di$, pstack%(pstate_i%-2), pstate%("on")
+      if (pstack%(pstack_i%-2) = pstate%("on")) and (expr_expect_c%>0) and (operator_c%>1) then if not isgoing then & "expr_expect_c%",expr_expect_c%: stop
+      if isgoing then & "if we already have a goto/gosub then this is a syntax error"
+      'if isgoing then & "ongoto/gosub: add fake comma and continue with exprs": stop
+      'if isgoing and (operator_c%<=0) then stop
+      if isgoing and di$="GOSUB" then stop :' on..gosub not implemented yet TODOTODO, should compile di$ here
+      if isgoing then expr_expect_stack%(expr_expect_c%-1)=type_opcode%: gosub 10900 : 'comma_stack(0)=1
+      if isgoing and (expr_expect_c%>0) then stop : 'not a bug per se, but wasn't sure if this could happen
+      if isgoing and (expr_expect_c%=0) then & "no EXPR_EXPECT_C":expr_expect_c% = 1:expr_expect_stack%(0) = type_int% : ' TODO can it ever be > 0 ?
+      'if isgoing then & "setting expr_expect_s at",expr_expect_c%-1,"to int": expr_expect_stack%(expr_expect_c%-1) = type_int%:& expr_expect_stack%(expr_expect_c%-1)
+      if isgoing then pstack_i% = pstack_i% -1 : ci%=ci%-1 : return
+
+      if (di$ = "TO") then & "TODOTODO saw to, going to assume we are in a FOR .. statement", compiled$(compiled_c%-4), compiled$(0)
+      if (di$="TO") then & "okay so compiled$(1..compiled_c%-1) holds the initial FOR assignment and top of opstack would be ==", operator_stack$(operator_c%-1)
+      if (di$="TO") then & "we should probably have used the assignment parser for this"
+      if di$="TO" then & "pop two levels off pstack to get down to FOR pstate"
+      if di$="TO" and operator_c%>0 then & "TO WITH OPSTACK", operator_c%, operator_stack$(operator_c%-1): expr_expect_stack%(expr_expect_c%-1)=type_opcode%:gosub 10900
+      if di$="TO" then last_to_offset% = compiled_c%
+      if di$="TO" then comma_stack%(0)=1:expr_expect_c% = 1:expr_expect_stack%(expr_expect_c%-1) = type_int%
+      if di$="TO" then pstack_i%=pstack_i%-1: ci%=ci%-1:return
+      if di$="TO" then & "should act like a comma inside for": stop
+      if di$="TO" then pstack_i% = pstack_i% - 2 : ci% = ci%-1: return
+      if di$="TO" then stop
+
+      if statement(di$) then & di$ + " is a statement keyword, TODO should tis be allowed?": stop
+      & "statement keyword?", di$, statement(ups$(di$))
+      if (expr_expect_c%<>0) and (expr_expect_stack%(expr_expect_c%-1) = type_opcode%) then print "got identifier but looked for opcode":stop
+      if (expr_expect_c%<>0) and (expr_expect_stack%(expr_expect_c%-1) = type_int%) then expr_expect_stack%(expr_expect_c%-1) = type_opcode%
+      if (expr_expect_c%<>0) and expr_expect_stack%(expr_expect_c%-1)<>type_opcode% then print "wtf expr expect after identifier", : stop
+
+      operator_stack$(operator_c%) = fntlv$(type_ptr%, id$)
+      comma_stack%(operator_c%) = ( chnext$="(" )
+      operator_c% = operator_c% + 1
       pstack_i% = pstack_i% - 1
       return
 13000 ' DATA
-      print ch$,found$,"DATA",ci%
       if fnwhitespace%(ci%) then RETURN
-      if ch$ = quot$ then print "woop" : pstack_i% = pstack_i%  + 1 : pstack%(pstack_i%) = pstate%("string"): string_builder% = ci%+1 : return
-      if ch$ = "," then print "data col comma at",no_data%,rec_data%: rec_data% = rec_data% + 1 : return
-      compiled_data$(no_data%, rec_data%) = compiled_data$(no_data%, rec_data%) + ch$
+      if ch$ = quot$ then pstack_i% = pstack_i%  + 1 : pstack%(pstack_i%) = pstate%("string"): string_builder% = ci%+1 : return
+      if ch$ = "," then rec_data% = rec_data% + 1 : return
+      this$ = compiled_data$(no_data%, rec_data%)
+      if this$ = "" then this$ = fntlv$(type_int%, "")
+      compiled_data$(no_data%, rec_data%) = fntlv$(fntyp%(this$,1), fnval$(this$,1) + ch$)
       compiled_data$(no_data%, rec_data% + 1) = ""
-      print "DATA read until : or ,  - rec:", rec_data%, ch$, ch$=","
       return
+14000 '"ON" (expr) ("GOTO"|"GOSUB") 1,2,3,...
+      & "ON .. GOTO/GOSUB is a stub", asc(ch$)
+      'gosub 10900
+      '& "back from compiling ON premise"
+      operator_c% = 0
+      if th_re(ch$, "^[ 0-9,]",1) then return
+      if not ((ch$ = ":") or (ch$="'") or (asc(ch$)=0)) then stop : REM not next statement, not REM, not EOF; what is it?
+      ' arguably we could have used the expression parser here instead and permitted variables in ON .. GO .. x,y,z
+      ' which would be cleaner (for us) but less compatible with regular basic
+      list$ = mid$(inp$, cion%, ci%-cion%)
+      & list$
+      stop
+15000 'FOR = [here] TO [stopvar]
+     lhs_keybytecode$ = ""
+    ' for i = 0 to compiled_c%-1
+    '    & "FOR: ",i,compiled$(i)
+    ' next i
+     ' we have an assignment starting with =/:= in compiled$(0)
+     ' capture the loop var index as bytecode:
+     lhs_keybytecode$ = ""
+     for i = 1 to last_assignment_offset - 2 : ' set in the pstate%("assignment") handler
+       lhs_keybytecode$ = lhs_keybytecode$ + compiled$(i)
+     next i
+     ' the final element is the name of the lhs, which we sometimes need as a type_ptr% and sometimes as type_str$
+     ' the loop var name is stored at compiled$(i) now, i=last_assignment_offset-1
+     lhs_ptrbytecode$ = lhs_keybytecode$ + fntlv$(type_ptr%, fnval$(compiled$(i),1))
+     lhs_ptrkeybytecode$ = lhs_keybytecode$ + fntlv$(type_ptrkey%,fnval$(compiled$(i),1))
+     lhs_strbytecode$ = lhs_keybytecode$ + compiled$(i)
+     ' the initial value is whatever is in last_assignment_offset..last_to_offset%
+     if compiled_c% - last_assignment_offset <= 0 then stop 'no initial value
+     rhs$ = ""
+     for xx = last_assignment_offset to last_to_offset%-1
+       'print "FOR rhs", xx, compiled$(xx)
+       rhs$ = rhs$ + compiled$(xx)
+     next xx
+     varstop$ = ""
+     for xx = last_to_offset% to compiled_c% -1
+       'print "FOR stopvar", xx, compiled$(xx)
+       varstop$ = varstop$  + compiled$(xx)
+     next xx
+     ' varstop will need to be looked up wherever we see NEXT,
+     ' but we can't compute lhs_ptrkeybytecode$ statically,
+     ' and it can very well look different: FOR i(1+2)=7 to 9: NEXT i(3)
+     ' so TODOTODO for now we mock it with (0):
+     varstop$(0) = varstop$
+     ' capture that, then output:
+     ' - initial assignment: lhs := rhs
+     ' - varstops$(ptrkey) = ptrkey   (used by NEXT later)
+     ' - loopvar = initial ; label [ptr]
+     compiled$(0) = lhs_strbytecode$ + rhs$ + fntlv$(type_opcode%, "=")
+     compiled$(0) = compiled$(0) + lhs_ptrkeybytecode$ + fntlv$(type_int%, 1) + fntlv$(type_str%, "varstops") + varstop$ + fntlv$(type_opcode%, "=")
+     compiled$(0) = compiled$(0) + lhs_ptrkeybytecode$ + fntlv$(type_opcode%, "#") : ' LINE/LABEL
+     compiled_c% = 1
+     expr_expect_c%=0: operator_c%=0 : ' TODO unsure if this is needed
+     gosub 7400
+     compiled_c% = 0
+     return
+60000 '
+print "chain yo"
+open "demo.bcb", as #1
+erase bc$
+for toneof = 0 to val("Inf") step 1
+if not eof(1) then read#1; inp$ : c$(toneof)=inp$: gosub 6000: bc$(toneof)=bytecode$: next toneof
+bytecode$ = ""
+for i = 0 to toneof-1
+  & c$(i) spc$(30-len(c$(i))) "=>", bc$(i)
+  bytecode$ = bytecode$ + bc$(i)
+next i
+& "... sleeping 15 ..."
+sleep 15
+gosub 600
+print "Executed DEMO.BCB without crashing, what a day"
+goto 10
