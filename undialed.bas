@@ -10,16 +10,18 @@
    70  print string$(20," ")+col$+"160m"+forall$+n$+reset$+" : "+diallog$+" "+ne$+" "+n$+reset$+" "+mpl$+" ";
    80  print col$+"93m"+dial$+chr$(10088)+n$+col$+"93m"+chr$(10089)+reset$
    90  th_exec "dial /log|cut -c 15-|uniq", log$
-  100  log$=th_sed$(log$, " +[^ ]+\n",chr$(10),"g")
-  110  'log$=th_sed$(log$, "(^|\n)[^ ]+ +",chr$(10),"g")
-  120  'log$=th_sed$(log$, "[\(\) \r-]+","","g")
-  122  off%=2
-  130  nexto = instr(log$,chr$(10), off%) : if nexto = -1 then 180
-  140  num$=th_sed$(mid$(log$,off%,nexto-off%+1), "[\(\) \r-]+", "","g")
-  145 'print num$
-  150  off%=nexto+2
+  100  rem log$=th_sed$(log$, " +[^ ]+\n",chr$(10),"g") : 'this crashes when there's too much stuff in the log
+  110  rem log$=th_sed$(log$, "(^|\n)[^ ]+ +",chr$(10),"g")
+  120  rem log$=th_sed$(log$, "[\(\) \r-]+","","g")
+  122  for off% = 1 to len(log$) -1
+  130  nexto = instr(log$,ctl, off%-1)
+       if nexto = -1 then nexto = len(log$)
+       num$ = mid$(log$,off%,nexto-off%)
+       num$ = th_sed$(num$, " +[^ ]+\r?$","")
+  140  num$=th_sed$(num$, "[\(\) \r-]+", "","g")
   160  nums(num$)=1
-  170  goto 130
+       off% = nexto + 1
+  170  next off%
   180  had=0: nohad=0
   185  if infiles_c% <= 0 then end
   190  fame$ = infiles$(infiles_c%-1) : print infiles_c%,"opening",fame$ : open fame$, as #1
